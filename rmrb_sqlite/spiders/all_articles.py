@@ -17,55 +17,31 @@ class AllArticles(scrapy.Spider):
         "http://paper.people.com.cn"
     ]
 
-    # def parse(self, response):
-    #     item = RmrbSqliteItem()
-    #     request_article = scrapy.Request(
-    #         "http://paper.people.com.cn/rmrb/html/2017-04/24/nw.D110000renmrb_20170424_1-06.htm",
-    #         callback=self.parse_article)
-    #     request_article.meta['item'] = item
-    #     yield request_article
-
-    # # 爬取指定天数，通过range(n)指定天数
-    # def parse(self, response):
-    #     # 用arrow指定日期区间
-    #     start = datetime.datetime(2017, 4, 24)
-    #     end = datetime.datetime(2017, 4, 24)
-    #     c_date = arrow.now()
-    #     c_ym = c_date.format('YYYY-MM')
-    #     c_d = c_date.format('DD')
-    #     url = "http://paper.people.com.cn/rmrb/html/" + c_ym + "/" + c_d + "/node_642.htm"
-    #     yield url
-    #     for r in arrow.Arrow.range('day', start, end):
-    #         c_ym = r.format('YYYY-MM')
-    #         c_d = r.format('DD')
-    #         url = "http://paper.people.com.cn/rmrb/html/" + c_ym + "/" + c_d + "/nbs.D110000renmrb_01.htm"
-    #         yield scrapy.Request(url, callback=self.parse_section)
-    #
-
-    #
-
+    # 爬取指定日期的报纸，只需修改 start 和 end 参数即可。
     def parse(self, response):
-        url = "http://paper.people.com.cn"
-        yield scrapy.Request(url, callback=self.parse_item)
+        start = datetime.datetime(2017, 3, 25)
+        end = datetime.datetime(2017, 3, 26)
+        for r in arrow.Arrow.range('day', start, end):
+            year_month = r.format('YYYY-MM')
+            day = r.format('DD')
+            url = "http://paper.people.com.cn/rmrb/html/" + year_month + "/" + day + "/nbs.D110000renmrb_01.htm"
+            yield scrapy.Request(url, callback=self.parse_section)
 
+    # 爬取当天所有版块，传递到parse_item()
     def parse_section(self, response):
         data = response.body
         soup = BeautifulSoup(data, "html5lib")
-        # ###################################补全搜索版块链接的代码，2017年4月24日21:12:51
-        rs = soup.find_all("div", class_="right_title-name").ul.find_all('a')
-
+        rs = soup.find_all("div", class_="right_title-name")
         for r in rs:
-            href = r.get('href')
-            re.sub('./', '', href)
+            href = r.a.get('href')
+            not_fixed = re.sub('./', '', href)
+            if not_fixed:
+                href = re.sub('./', '', href)
             url = urlparse.urljoin(response.url, href)
             yield scrapy.Request(url, callback=self.parse_item)
 
-    # 爬取某版块所有文章，传递到parse_article()
+    # 爬取某一版块所有文章，传递到parse_article()
     def parse_item(self, response):
-        request_article = scrapy.Request(
-            "http://paper.people.com.cn/rmrb/html/2017-04/24/nbs.D110000renmrb_03.htm",
-            callback=self.parse_article)
-        yield request_article
         data = response.body
         soup = BeautifulSoup(data, "html5lib")
         ds = soup.find('table', width="265", style="margin-top:3px;").find_all('a')
@@ -75,31 +51,34 @@ class AllArticles(scrapy.Spider):
             request_article = scrapy.Request(url, callback=self.parse_article)
             yield request_article
 
-    # 爬取某篇文章标题、正文、发表日期、链接
+    # 爬取某一篇文章标题、正文、发表日期、链接
     def parse_article(self, response):
         item = RmrbSqliteItem()
         data = response.body
         soup = BeautifulSoup(data, "html5lib")
-        temp = "    "
+        text = "    "
         h3 = soup.find('div', class_="text_c").find('h3')
         h1 = soup.find('div', class_="text_c").find('h1')
         h2 = soup.find('div', class_="text_c").find('h2')
         h4 = soup.find('div', class_="text_c").find('h4')
         if h3:
-            temp = temp + h3.get_text() + '\n    '
+            text = text + h3.get_text() + '\n    '
         if h1:
-            temp = temp + h1.get_text() + '\n    '
+            text = text + h1.get_text() + '\n    '
         if h2:
-            temp = temp + h2.get_text() + '\n    '
+            text = text + h2.get_text() + '\n    '
         if h4:
-            temp = temp + h4.get_text() + '\n'
+            text = text + h4.get_text() + '\n'
         ps = soup.find('div', style="display:none", id="articleContent").find_all('p')
         for p in ps:
-            temp += p.get_text()
-            temp += "\n"
-        item['text'] = temp
-        item['title'] = soup.find('title').get_text()
-        item['link'] = response.url
-        publish_temp = re.sub('\s', '', soup.find('div', id="riqi_", style="float:left;").get_text())
-        item['publish'] = publish_temp[4:]
+            text += p.get_text()
+            text += "\n"
+        title = soup.find('title').get_text()
+        if title != u"广告":
+            item['title'] = title
+            item['text'] = text
+            item['link'] = response.url
+            publish = re.sub('\s', '', soup.find('div', id="riqi_", style="float:left;").get_text())
+            publish = re.sub(u"星期", u" 星期", re.sub(u"人民日报", '', publish))
+            item['publish'] = publish
         yield item
