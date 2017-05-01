@@ -35,7 +35,7 @@ class AllArticles(scrapy.Spider):
         for r in rs:
             href = r.a["href"]
             url = urlparse.urljoin(response.url, href)
-            # 必须添加 dont_filter=True 属性，否则会跳过第01版
+            # 这里必须添加 dont_filter=True 属性，否则会跳过第01版
             request_article = scrapy.Request(url, callback=self.parse_item, dont_filter=True)
             yield request_article
 
