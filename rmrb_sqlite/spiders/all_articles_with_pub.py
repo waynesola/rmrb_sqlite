@@ -11,7 +11,7 @@ import re
 
 
 class AllArticles(scrapy.Spider):
-    name = "all"
+    name = "pub"
     allowed_domains = ["paper.people.com.cn"]
     start_urls = [
         "http://paper.people.com.cn"
@@ -19,8 +19,8 @@ class AllArticles(scrapy.Spider):
 
     # 爬取指定日期的报纸，只需修改 start 和 end 参数即可。
     def parse(self, response):
-        start = datetime.datetime(2017, 1, 1)
-        end = datetime.datetime(2017, 1, 31)
+        start = datetime.datetime(2017, 5, 1)
+        end = datetime.datetime(2017, 5, 1)
         for r in arrow.Arrow.range('day', start, end):
             year_month = r.format('YYYY-MM')
             day = r.format('DD')
@@ -33,12 +33,11 @@ class AllArticles(scrapy.Spider):
         soup = BeautifulSoup(data, "html5lib")
         rs = soup.find_all("div", class_="right_title-name")
         for r in rs:
-            href = r.a.get('href')
-            not_fixed = re.sub('./', '', href)
-            if not_fixed:
-                href = re.sub('./', '', href)
+            href = r.a["href"]
             url = urlparse.urljoin(response.url, href)
-            yield scrapy.Request(url, callback=self.parse_item)
+            # 必须添加 dont_filter=True 属性，否则会跳过第01版
+            request_article = scrapy.Request(url, callback=self.parse_item, dont_filter=True)
+            yield request_article
 
     # 爬取某一版块所有文章，传递到parse_article()
     def parse_item(self, response):
@@ -74,11 +73,14 @@ class AllArticles(scrapy.Spider):
             text += p.get_text()
             text += "\n"
         title = soup.find('title').get_text()
-        if title != u"广告":
-            item['title'] = title
-            item['text'] = text
-            item['link'] = response.url
-            publish = re.sub('\s', '', soup.find('div', id="riqi_", style="float:left;").get_text())
-            publish = re.sub(u"星期", u" 星期", re.sub(u"人民日报", '', publish))
-            item['publish'] = publish
+        item['title'] = title
+        item['text'] = text
+        item['link'] = response.url
+        publish = re.sub('\s', '', soup.find('div', id="riqi_", style="float:left;").get_text())
+        publish = re.sub(u"星期", u" 星期", re.sub(u"人民日报", '', publish))
+        pub = soup.find("div", class_="ban_t").get_text()
+        pub = re.sub('\s', '', pub)
+        pos = re.search("PDF", pub).start()
+        pub = pub[:pos]
+        item['publish'] = publish + u"  第" + pub
         yield item
