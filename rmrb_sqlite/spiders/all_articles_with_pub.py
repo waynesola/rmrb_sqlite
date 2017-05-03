@@ -11,7 +11,7 @@ import re
 
 
 class AllArticles(scrapy.Spider):
-    name = "pub"
+    name = "all"
     allowed_domains = ["paper.people.com.cn"]
     start_urls = [
         "http://paper.people.com.cn"
