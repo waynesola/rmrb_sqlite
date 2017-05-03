@@ -77,7 +77,7 @@ class AllArticles(scrapy.Spider):
         item['text'] = text
         item['link'] = response.url
         publish = re.sub('\s', '', soup.find('div', id="riqi_", style="float:left;").get_text())
-        publish = re.sub(u"星期", u" 星期", re.sub(u"人民日报", '', publish))
+        publish = re.sub(u"星期", u"  星期", re.sub(u"人民日报", '', publish))
         pub = soup.find("div", class_="ban_t").get_text()
         pub = re.sub('\s', '', pub)
         pos = re.search("PDF", pub).start()
